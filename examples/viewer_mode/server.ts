@@ -18,6 +18,10 @@ Deno.serve({ port: 8080 }, async (req: Request) => {
     const path = `${Deno.cwd()}/examples/viewer_mode/static/main.js`
     return await serveFile(req, path);
   }
+  else if (url.pathname === "/style.css") {
+    const path = `${Deno.cwd()}/examples/viewer_mode/static/style.css`
+    return await serveFile(req, path);
+  }
   else if (url.pathname === "/mod.ts"){
     const path = `${Deno.cwd()}/mod.ts`;
     return await serveFile(req, path);

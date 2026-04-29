@@ -3,41 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Viewer Mode Example - sono.land</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; }
-    .header { background: #16213e; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 18px; }
-    .status-bar { display: flex; gap: 15px; font-size: 13px; }
-    .status-bar span { padding: 4px 10px; border-radius: 12px; background: #0f3460; }
-    .status-bar .live { background: #e94560; }
-    .main { padding: 20px; max-width: 1200px; margin: 0 auto; }
-    .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; margin-bottom: 80px; }
-    .video-grid > video { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; border-radius: 8px; }
-    .video-card { background: #16213e; border-radius: 8px; overflow: hidden; position: relative; }
-    .video-card video { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; }
-    .video-card .label { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 4px; font-size: 12px; }
-    .video-card .label.viewer { background: rgba(40,167,69,0.8); }
-    .video-card .label.broadcaster { background: rgba(233,69,96,0.8); }
-    .controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
-    .btn { padding: 12px 24px; border: none; border-radius: 25px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s; }
-    .btn:hover { transform: scale(1.05); }
-    .btn-cam { background: #e94560; color: #fff; }
-    .btn-cam.active { background: #28a745; }
-    .btn-cam:disabled { background: #555; cursor: not-allowed; transform: none; }
-    #debug { position: fixed; top: 60px; right: 10px; width: 300px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.8); font-family: monospace; font-size: 11px; padding: 10px; border-radius: 5px; display: none; }
-    #debug.show { display: block; }
-    #debug div { color: #0f0; margin: 2px 0; }
-  </style>
+  <title>Viewer Mode - sono.land</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="header">
-    <h1>sono.land - Viewer Mode</h1>
+    <h1>sono.land</h1>
     <div class="status-bar">
       <span id="myId">Connecting...</span>
-      <span id="viewerCount">Viewers: 0</span>
-      <span id="broadcasterCount">Broadcasters: 0</span>
       <span id="connStatus" class="live">LIVE</span>
     </div>
   </div>
@@ -49,8 +22,6 @@
   <div class="controls">
     <button class="btn btn-cam" id="toggleCam">Enable Camera</button>
   </div>
-
-  <div id="debug"></div>
 
   <script type="module" src="./main.js"></script>
 </body>
