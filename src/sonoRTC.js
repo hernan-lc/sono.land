@@ -127,6 +127,8 @@ export class SonoRTC {
       console.log('[RTC] got local media, tracks:', mediaStream.getTracks().length)
       this.localVideo.srcObject = mediaStream;
       this.mediaStream = mediaStream;
+      // Add tracks to all existing peer connections
+      this.addTracksToAllConnections()
     })
     .catch(err => {
       console.log('[RTC] getUserMedia error:', err.name, err.message);
@@ -244,6 +246,25 @@ export class SonoRTC {
     } else {
       this.startLocalMedia();
     }
+  }
+
+  addTracksToAllConnections(){
+    if(!this.mediaStream) {
+      console.log('[RTC] addTracksToAllConnections - no mediaStream')
+      return
+    }
+    const tracks = this.mediaStream.getTracks()
+    console.log('[RTC] addTracksToAllConnections -', tracks.length, 'tracks to', Object.keys(this.peerconnection).length, 'connections')
+    Object.keys(this.peerconnection).forEach(client => {
+      const pc = this.peerconnection[client]
+      // Check if tracks already added
+      const senders = pc.getSenders()
+      const hasTracks = senders.some(s => s.track)
+      if(!hasTracks && tracks.length > 0) {
+        console.log('[RTC] adding tracks to connection with', client)
+        tracks.forEach(track => pc.addTrack(track, this.mediaStream))
+      }
+    })
   }
 
 }
