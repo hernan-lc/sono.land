@@ -6,6 +6,7 @@ class OmegleClone {
         this.localStream = null;
         this.peerConnection = null;
         this.partnerId = null;
+        this.handlers = {};
 
         this.localVideo = document.getElementById('localVideo');
         this.remoteVideo = document.getElementById('remoteVideo');
@@ -23,6 +24,14 @@ class OmegleClone {
         this.stopBtn.addEventListener('click', () => this.stopChat());
     }
 
+    send(protocol, payload = {}) {
+        this.sono.ws.send(JSON.stringify({ protocol, payload }));
+    }
+
+    onEvent(protocol, callback) {
+        this.handlers[protocol] = callback;
+    }
+
     async startChat() {
         try {
             this.updateStatus('Connecting to server...');
@@ -38,19 +47,30 @@ class OmegleClone {
             // Connect to sono server
             this.sono = new SonoClient('ws://localhost:8000/ws');
 
-            // Set up event handlers using sono.land's protocol system
-            this.sono.on('partner-found', (payload) => this.onPartnerFound(payload));
-            this.sono.on('partner-disconnected', () => this.onPartnerDisconnected());
-            this.sono.on('waiting', (payload) => this.updateStatus(payload.message));
-            this.sono.on('video-offer', (payload) => this.onVideoOffer(payload));
-            this.sono.on('video-answer', (payload) => this.onVideoAnswer(payload));
-            this.sono.on('ice-candidate', (payload) => this.onIceCandidate(payload));
+            // Register all event handlers
+            this.onEvent('partner-found', (payload) => this.onPartnerFound(payload));
+            this.onEvent('partner-disconnected', () => this.onPartnerDisconnected());
+            this.onEvent('waiting', (payload) => this.updateStatus(payload.message));
+            this.onEvent('video-offer', (payload) => this.onVideoOffer(payload));
+            this.onEvent('video-answer', (payload) => this.onVideoAnswer(payload));
+            this.onEvent('ice-candidate', (payload) => this.onIceCandidate(payload));
 
-            // Wait for connection and find partner
-            this.sono.onconnection(() => {
+            // Set up single message handler that routes to correct callback
+            this.sono.ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const protocol = data.protocol;
+                const payload = data.payload;
+
+                if (protocol && this.handlers[protocol]) {
+                    this.handlers[protocol](payload);
+                }
+            };
+
+            // Wait for connection, then find partner
+            this.sono.ws.onopen = () => {
                 this.updateStatus('Connected! Finding a partner...');
-                this.sono.message({}, 'find-partner');
-            });
+                this.send('find-partner');
+            };
 
             // Update UI
             this.startBtn.disabled = true;
@@ -71,7 +91,7 @@ class OmegleClone {
 
         // Find new partner
         this.updateStatus('Finding new partner...');
-        this.sono.message({}, 'next-partner');
+        this.send('find-partner');
     }
 
     stopChat() {
@@ -80,7 +100,7 @@ class OmegleClone {
         this.stopLocalStream();
 
         if (this.sono) {
-            this.sono.message({}, 'stop-chat');
+            this.send('stop-chat');
         }
 
         // Reset UI
@@ -133,11 +153,10 @@ class OmegleClone {
         // Handle ICE candidates
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.partnerId) {
-                this.sono.directmessage({
-                    originalProtocol: 'ice-candidate',
+                this.send('ice-candidate', {
                     to: this.partnerId,
                     candidate: event.candidate
-                }, this.partnerId, 'ice-candidate');
+                });
             }
         };
 
@@ -162,11 +181,10 @@ class OmegleClone {
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
-            this.sono.directmessage({
-                originalProtocol: 'video-offer',
+            this.send('video-offer', {
                 to: this.partnerId,
                 offer: offer
-            }, this.partnerId, 'video-offer');
+            });
         } catch (error) {
             console.error('Error creating offer:', error);
         }
@@ -183,11 +201,10 @@ class OmegleClone {
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
 
-            this.sono.directmessage({
-                originalProtocol: 'video-answer',
+            this.send('video-answer', {
                 to: from,
                 answer: answer
-            }, from, 'video-answer');
+            });
         } catch (error) {
             console.error('Error handling offer:', error);
         }
