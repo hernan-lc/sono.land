@@ -137,6 +137,23 @@ export class EventHandler {
     else if (message === 'mychannel'){
       results.push(client.channel)
     }
+    else if (message === 'myrole'){
+      results.push(client.isViewer ? 'viewer' : 'broadcaster')
+    }
+    else if (message === 'channelviewers'){
+      Object.keys(channelsList[client.channel]).forEach(id => {
+        if(channelsList[client.channel][id].isViewer){
+          results.push(id)
+        }
+      })
+    }
+    else if (message === 'channelbroadcasters'){
+      Object.keys(channelsList[client.channel]).forEach(id => {
+        if(!channelsList[client.channel][id].isViewer){
+          results.push(id)
+        }
+      })
+    }
     else {
       results.push('invalid grab request')
     }
@@ -148,5 +165,18 @@ export class EventHandler {
         type: message
       }
     }))
+  }
+
+  setViewerRole(packet: Packet, client: Client){
+    const { isViewer } = packet.payload;
+    client.isViewer = isViewer === 'true';
+    console.log(`Client ${client.id} set as ${client.isViewer ? 'viewer' : 'broadcaster'}`);
+    
+    client.socket.send(JSON.stringify({
+      protocol: 'viewerRoleSet',
+      payload: {
+        isViewer: client.isViewer
+      }
+    }));
   }
 }

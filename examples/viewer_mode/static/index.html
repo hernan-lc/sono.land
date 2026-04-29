@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Viewer Mode Example - sono.land</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .controls {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button.viewer {
+      background-color: #28a745;
+    }
+    button.viewer:hover {
+      background-color: #218838;
+    }
+    button.broadcaster {
+      background-color: #dc3545;
+    }
+    button.broadcaster:hover {
+      background-color: #c82333;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .video-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    video {
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      max-width: 300px;
+    }
+    #roleInfo {
+      font-weight: bold;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Viewer Mode Example</h1>
+    
+    <div id="roleInfo">
+      Current Role: <span id="currentRole">Not set</span> | 
+      My ID: <span id="myId">-</span> | 
+      Channel: <span id="currentChannel">home</span>
+    </div>
+    
+    <div class="controls">
+      <button id="setViewer" class="viewer">Set as Viewer</button>
+      <button id="setBroadcaster" class="broadcaster">Set as Broadcaster</button>
+      <button id="start">Start Camera</button>
+      <button id="connectStream">Connect to Stream</button>
+    </div>
+    
+    <div class="status" id="status">Ready to connect</div>
+    
+    <div id="debug" style="margin:10px 0;padding:10px;background:#111;color:#0f0;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto;"></div>
+    
+    <div class="video-container">
+      <div>
+        <h3>Local Video</h3>
+        <video id="localVideo" playsinline autoplay muted></video>
+      </div>
+      <div>
+        <h3>Remote Videos</h3>
+        <div id="remotevideocontainer"></div>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <h3>Viewer Information</h3>
+      <p>As a <strong>Viewer</strong>:</p>
+      <ul>
+        <li>You will not share your camera/microphone</li>
+        <li>You will only receive video from broadcasters</li>
+        <li>You can watch streams without being seen</li>
+      </ul>
+      
+      <p>As a <strong>Broadcaster</strong>:</p>
+      <ul>
+        <li>You will share your camera/microphone</li>
+        <li>Other participants can see your video</li>
+        <li>You can stream to viewers</li>
+      </ul>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

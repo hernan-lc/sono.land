@@ -122,6 +122,9 @@ export class Sono {
             this.channelsList
           );
           break;
+        case "setViewerRole":
+          this.eventHandler.setViewerRole(data, client);
+          break;
         default:
           // this.eventHandler
           // console.log('default hit', data)

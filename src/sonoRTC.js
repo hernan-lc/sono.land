@@ -1,5 +1,5 @@
 export class SonoRTC {
-  constructor(serverConfig, signalingServer, localVideo, remoteVideoContainer, constraints){
+  constructor(serverConfig, signalingServer, localVideo, remoteVideoContainer, constraints, viewerMode = false){
     this.configuration = {iceServers: [{urls: serverConfig}]};
     this.peerconnection = {}
     this.server = signalingServer;
@@ -8,6 +8,7 @@ export class SonoRTC {
     // this.eventListeners();
     this.mediaTracks = {};
     this.remotevideocontainer = remoteVideoContainer;
+    this.viewerMode = viewerMode;
     // this.localtracks = [];
     // this.createOffer = this.createOffer.bind(this)
     // this.createdOffer = null;
@@ -92,15 +93,31 @@ export class SonoRTC {
     })
   }
   startLocalMedia(){
-    navigator.mediaDevices.getUserMedia(this.constraints)
+    if(this.viewerMode){
+      return;
+    }
+    const getUserMedia = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+      ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+      : (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia)
+        ? (constraints) => new Promise((resolve, reject) => {
+            const fn = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+            fn.call(navigator, constraints, resolve, reject);
+          })
+        : null;
+
+    if(!getUserMedia){
+      console.log('getUserMedia not supported');
+      return;
+    }
+
+    getUserMedia(this.constraints)
     .then(mediaStream => {
       this.localVideo.srcObject = mediaStream;
-      for (const track of mediaStream.getTracks()){
-
-        this.mediaStream = mediaStream;
-      }
+      this.mediaStream = mediaStream;
     })
-    .catch(err => console.log('err: ', err))
+    .catch(err => {
+      console.log('getUserMedia error:', err.name, err.message);
+    })
   }
   async startConnection(){
     if(!this.inRoom) await this.eventListeners();
@@ -120,10 +137,12 @@ export class SonoRTC {
 
       this.peerconnection[client] = new RTCPeerConnection(this.configuration);
 
-      for (const track of this.mediaStream.getTracks()){
+      if(!this.viewerMode && this.mediaStream){
+        for (const track of this.mediaStream.getTracks()){
 
-        this.peerconnection[client].addTrack(track, this.mediaStream);
+          this.peerconnection[client].addTrack(track, this.mediaStream);
 
+        }
       }
       this.peerconnection[client].onnegotiationneeded = () => {
         this.peerconnection[client].createOffer()
@@ -158,6 +177,7 @@ export class SonoRTC {
           remoteVideo = document.createElement('video')
           remoteVideo.setAttribute('playsinline', 'true')
           remoteVideo.setAttribute('autoplay', 'true')
+          remoteVideo.setAttribute('muted', 'true')
           remoteVideo.setAttribute('id', client)
           this.remotevideocontainer.appendChild(remoteVideo)
         }
@@ -198,6 +218,23 @@ export class SonoRTC {
     this.mediaTracks = {};
 
     this.startConnection();
+  }
+
+  setViewerMode(enabled){
+    this.viewerMode = enabled;
+    if(enabled){
+      console.log('Viewer mode enabled');
+      if(this.mediaStream){
+        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream = null;
+      }
+      if(this.localVideo){
+        this.localVideo.srcObject = null;
+      }
+    } else {
+      console.log('Viewer mode disabled');
+      this.startLocalMedia();
+    }
   }
 
 }
