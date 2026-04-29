@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omegle Clone - sono.land Example</title>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Omegle Clone</h1>
+            <p>Random Video Chat Example (sono.land)</p>
+        </header>
+        
+        <main>
+            <div class="video-container">
+                <div class="video-box">
+                    <h3>You</h3>
+                    <video id="localVideo" autoplay muted playsinline></video>
+                </div>
+                
+                <div class="video-box">
+                    <h3>Stranger</h3>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button id="startBtn" class="btn btn-primary">Start Chat</button>
+                <button id="nextBtn" class="btn btn-secondary" disabled>Next</button>
+                <button id="stopBtn" class="btn btn-danger" disabled>Stop</button>
+            </div>
+            
+            <div class="status" id="status">Click "Start Chat" to begin</div>
+            
+            <div class="info">
+                <p>This is a simple Omegle clone example built with <a href="https://sono.land">sono.land</a>.</p>
+                <p>Features: Random matching, WebRTC video chat, "Next" button to skip.</p>
+            </div>
+        </main>
+    </div>
+    
+    <script type="module" src="static/script.js"></script>
+</body>
+</html>
