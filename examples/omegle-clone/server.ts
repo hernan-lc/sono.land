@@ -59,14 +59,17 @@ function findPartner(sender: Client) {
         console.log(`[SERVER] Sender ${sender.id} socket readyState:`, sender.socket.readyState);
         console.log(`[SERVER] Partner ${partner.id} socket readyState:`, partner.socket.readyState);
 
+        // Designate lower ID as initiator (creates the offer)
+        const isSenderInitiator = sender.id < partner.id;
+
         // Notify both users about the match
         const senderMessage = JSON.stringify({
             protocol: 'partner-found',
-            payload: { partnerId: partner.id.toString() }
+            payload: { partnerId: partner.id.toString(), isInitiator: isSenderInitiator }
         });
         const partnerMessage = JSON.stringify({
             protocol: 'partner-found',
-            payload: { partnerId: sender.id.toString() }
+            payload: { partnerId: sender.id.toString(), isInitiator: !isSenderInitiator }
         });
 
         console.log(`[SERVER] Sending partner-found to sender ${sender.id}:`, senderMessage);
