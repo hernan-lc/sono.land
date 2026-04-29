@@ -1,74 +1,147 @@
 import { Sono } from '../../mod.ts';
+import { Client } from '../../src/client.ts';
 
 const sono = new Sono();
 
-// Store waiting users for random matching
-const waitingUsers: Set<string> = new Set();
+// Store waiting users and partner mappings
+const waitingUsers: Map<string, Client> = new Map();
+const partnerMap: Map<string, string> = new Map();
 
-// Handle WebRTC signaling for video chat
-sono.on('video-offer', (event) => {
-    const { targetId, offer } = event.data;
-    sono.send(targetId, 'video-offer', { offer, fromId: event.senderId });
-});
+// Custom message handler for the omegle protocol
+function handleCustomMessage(data: any, sender: Client) {
+    const protocol = data.protocol;
+    const payload = data.payload;
 
-sono.on('video-answer', (event) => {
-    const { targetId, answer } = event.data;
-    sono.send(targetId, 'video-answer', { answer, fromId: event.senderId });
-});
+    switch (protocol) {
+        case 'find-partner':
+            findPartner(sender);
+            break;
+        case 'video-offer':
+            forwardToPartner(sender.id, payload.to, payload);
+            break;
+        case 'video-answer':
+            forwardToPartner(sender.id, payload.to, payload);
+            break;
+        case 'ice-candidate':
+            forwardToPartner(sender.id, payload.to, payload);
+            break;
+        case 'next-partner':
+            disconnectFromPartner(sender);
+            findPartner(sender);
+            break;
+        case 'stop-chat':
+            disconnectFromPartner(sender);
+            break;
+    }
+}
 
-sono.on('ice-candidate', (event) => {
-    const { targetId, candidate } = event.data;
-    sono.send(targetId, 'ice-candidate', { candidate, fromId: event.senderId });
-});
-
-// Handle "next" button to find new partner
-sono.on('find-partner', (event) => {
-    const userId = event.senderId;
-    
+function findPartner(sender: Client) {
     // Remove from waiting if already waiting
-    waitingUsers.delete(userId);
-    
+    waitingUsers.delete(sender.id.toString());
+
     // If there's someone waiting, connect them
     if (waitingUsers.size > 0) {
-        const partnerId = waitingUsers.values().next().value;
-        waitingUsers.delete(partnerId);
-        
+        const partner = waitingUsers.values().next().value;
+        waitingUsers.delete(partner.id.toString());
+
+        // Map partners to each other
+        partnerMap.set(sender.id.toString(), partner.id.toString());
+        partnerMap.set(partner.id.toString(), sender.id.toString());
+
         // Notify both users about the match
-        sono.send(userId, 'partner-found', { partnerId });
-        sono.send(partnerId, 'partner-found', { partnerId: userId });
+        sender.socket.send(JSON.stringify({
+            protocol: 'partner-found',
+            payload: { partnerId: partner.id.toString() }
+        }));
+
+        partner.socket.send(JSON.stringify({
+            protocol: 'partner-found',
+            payload: { partnerId: sender.id.toString() }
+        }));
     } else {
         // Add to waiting list
-        waitingUsers.add(userId);
-        sono.send(userId, 'waiting', { message: 'Waiting for a partner...' });
+        waitingUsers.set(sender.id.toString(), sender);
+        sender.socket.send(JSON.stringify({
+            protocol: 'waiting',
+            payload: { message: 'Waiting for a partner...' }
+        }));
     }
-});
+}
 
-// Handle disconnect
-sono.on('disconnect', (event) => {
-    const userId = event.senderId;
-    waitingUsers.delete(userId);
-    
-    // Notify partner if exists
-    if (event.partnerId) {
-        sono.send(event.partnerId, 'partner-disconnected', {});
+function forwardToPartner(fromId: string, toId: string, payload: any) {
+    const toClient = sono.clients[toId];
+    if (toClient && toClient.socket.readyState === WebSocket.OPEN) {
+        toClient.socket.send(JSON.stringify({
+            protocol: payload.originalProtocol || 'message',
+            payload: { ...payload, from: fromId }
+        }));
     }
-});
+}
+
+function disconnectFromPartner(sender: Client) {
+    const partnerId = partnerMap.get(sender.id.toString());
+    if (partnerId) {
+        const partner = sono.clients[partnerId];
+        if (partner && partner.socket.readyState === WebSocket.OPEN) {
+            partner.socket.send(JSON.stringify({
+                protocol: 'partner-disconnected',
+                payload: {}
+            }));
+        }
+        partnerMap.delete(partnerId);
+        partnerMap.delete(sender.id.toString());
+    }
+    waitingUsers.delete(sender.id.toString());
+}
+
+// Override the default message handler to handle custom protocols
+const originalHandleWs = sono.handleWs.bind(sono);
+sono.handleWs = function(socket: WebSocket) {
+    // Call original handler
+    originalHandleWs(socket);
+
+    // Get the client that was just added
+    const clientId = sono.lastClientId.toString();
+    const client = sono.clients[clientId];
+
+    if (client) {
+        // Add custom message handler
+        socket.addEventListener("message", (event) => {
+            const message = event.data;
+            try {
+                const data = JSON.parse(message);
+                // Handle our custom protocols
+                if (['find-partner', 'video-offer', 'video-answer', 'ice-candidate', 'next-partner', 'stop-chat'].includes(data.protocol)) {
+                    handleCustomMessage(data, client);
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        });
+
+        // Handle disconnect
+        socket.addEventListener("close", () => {
+            disconnectFromPartner(client);
+        });
+    }
+};
 
 // Serve static files
 const staticFiles = new Map<string, string>();
 
 async function loadStaticFiles() {
     const decoder = new TextDecoder();
-    
+    const basePath = new URL('.', import.meta.url).pathname;
+
     const files = [
-        { path: '/static/index.html', contentType: 'text/html' },
-        { path: '/static/style.css', contentType: 'text/css' },
-        { path: '/static/script.js', contentType: 'application/javascript' }
+        { path: 'static/index.html', contentType: 'text/html' },
+        { path: 'static/style.css', contentType: 'text/css' },
+        { path: 'static/script.js', contentType: 'application/javascript' }
     ];
-    
+
     for (const file of files) {
-        const content = decoder.decode(await Deno.readFile(new URL(file.path, import.meta.url)));
-        staticFiles.set(file.path, content);
+        const content = decoder.decode(await Deno.readFile(`${basePath}${file.path}`));
+        staticFiles.set(`/${file.path}`, content);
     }
 }
 
@@ -76,23 +149,23 @@ await loadStaticFiles();
 
 Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
-    
+
     // Handle WebSocket connections
     if (url.pathname === '/ws') {
         return sono.connect(req);
     }
-    
+
     // Serve static files
     if (staticFiles.has(url.pathname)) {
         const contentType = url.pathname.endsWith('.html') ? 'text/html' :
                            url.pathname.endsWith('.css') ? 'text/css' :
                            'application/javascript';
-        
+
         return new Response(staticFiles.get(url.pathname), {
             headers: { 'Content-Type': contentType }
         });
     }
-    
+
     // Default to index.html
     return new Response(staticFiles.get('/static/index.html'), {
         headers: { 'Content-Type': 'text/html' }
