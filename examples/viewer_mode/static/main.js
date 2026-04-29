@@ -1,95 +1,52 @@
 import { SonoClient } from "../../src/sonoClient.js"
 import { SonoRTC } from "../../src/sonoRTC.js"
 
-const debugEl = document.getElementById('debug');
-function log(...args) {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
-  console.log(msg);
-  debugEl.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-  debugEl.scrollTop = debugEl.scrollHeight;
-}
+const sono = new SonoClient('ws://localhost:8080/ws')
+const videoGrid = document.getElementById('videoGrid')
+const toggleBtn = document.getElementById('toggleCam')
 
-const randomId = Math.random().toString(36).substring(2, 8);
-log(`Starting client with random ID suffix: ${randomId}`);
+// Hidden local video for camera
+const localVideo = document.createElement('video')
+localVideo.autoplay = true
+localVideo.playsInline = true
+localVideo.muted = true
+localVideo.style.display = 'none'
+document.body.appendChild(localVideo)
 
-const sono = new SonoClient('ws://localhost:8080/ws');
+// Start as viewer (no camera)
+const rtc = new SonoRTC(
+  'stun:stun2.l.google.com:19302',
+  sono,
+  localVideo,
+  videoGrid,
+  { audio: false, video: true },
+  true
+)
 
+// Auto-connect
 sono.onconnection(() => {
-  log(`WebSocket connected (id suffix: ${randomId})`);
-  sono.grab('myid');
-  sono.grab('mychannel');
-  sono.grab('mychannelclients');
-});
+  sono.grab('myid')
+  sono.setViewerRole(true)
+})
 
 sono.on('grab', (payload) => {
-  const { type, message } = payload;
-  if (type === 'myid') {
-    const myId = message[0];
-    document.getElementById('myId').textContent = myId;
-    log(`My server ID: ${myId}`);
+  if (payload.type === 'myid') {
+    document.getElementById('myId').textContent = `ID: ${payload.message[0]}`
   }
-  else if (type === 'mychannel') {
-    document.getElementById('currentChannel').textContent = message[0];
-    log(`My channel: ${message[0]}`);
-  }
-  else if (type === 'mychannelclients') {
-    log(`Channel clients: [${message.join(', ')}]`);
-  }
-});
+})
 
-sono.on('message', (payload) => {
-  log(`Message from ${payload.from}: ${JSON.stringify(payload.message)}`);
-});
-
-sono.on('viewerRoleSet', (payload) => {
-  const role = payload.isViewer ? 'Viewer' : 'Broadcaster';
-  document.getElementById('currentRole').textContent = role;
-  document.getElementById('status').textContent = `Role set to: ${role}`;
-  log(`Role changed to: ${role}`);
-});
-
-sono.on('clientjoining', (payload) => {
-  log(`Client joined: ${payload.from}`);
-});
-
-sono.on('clientleaving', (payload) => {
-  log(`Client left: ${payload.from}`);
-});
-
-const serverConfig = 'stun:stun2.l.google.com:19302';
-const localVideo = document.getElementById('localVideo');
-const constraints = { audio: false, video: true };
-const remotevideocontainer = document.getElementById('remotevideocontainer');
-
-const rtc = new SonoRTC(serverConfig, sono, localVideo, remotevideocontainer, constraints, false);
-
-document.getElementById('setViewer').onclick = () => {
-  rtc.setViewerMode(true);
-  sono.setViewerRole(true);
-  document.getElementById('start').disabled = true;
-  log('Switched to Viewer mode');
-};
-
-document.getElementById('setBroadcaster').onclick = () => {
-  rtc.setViewerMode(false);
-  sono.setViewerRole(false);
-  document.getElementById('start').disabled = false;
-  log('Switched to Broadcaster mode');
-};
-
-document.getElementById('start').onclick = () => {
+// Toggle camera on/off
+toggleBtn.onclick = () => {
   if (rtc.viewerMode) {
-    log('Cannot start camera in viewer mode');
-    return;
+    rtc.setViewerMode(false)
+    rtc.startLocalMedia()
+    sono.setViewerRole(false)
+    toggleBtn.textContent = 'Disable Camera'
+    toggleBtn.classList.add('active')
+  } else {
+    rtc.setViewerMode(true)
+    sono.setViewerRole(true)
+    toggleBtn.textContent = 'Enable Camera'
+    toggleBtn.classList.remove('active')
   }
-  rtc.startLocalMedia();
-  document.getElementById('status').textContent = 'Camera started';
-  log('Camera started');
-};
-
-document.getElementById('connectStream').onclick = () => {
-  document.getElementById('currentChannel').textContent = 'stream';
-  rtc.changeChannel('stream');
-  document.getElementById('status').textContent = 'Connected to stream channel';
-  log('Connected to stream channel');
-};
+}
