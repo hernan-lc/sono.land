@@ -12,18 +12,20 @@ function handleCustomMessage(data: any, sender: Client) {
     const protocol = data.protocol;
     const payload = data.payload;
 
+    console.log(`[SERVER] Received from client ${sender.id}:`, protocol, payload);
+
     switch (protocol) {
         case 'find-partner':
             findPartner(sender);
             break;
         case 'video-offer':
-            forwardToPartner(sender.id, payload.to, payload);
+            forwardToPartner(sender.id, payload.to, protocol, payload);
             break;
         case 'video-answer':
-            forwardToPartner(sender.id, payload.to, payload);
+            forwardToPartner(sender.id, payload.to, protocol, payload);
             break;
         case 'ice-candidate':
-            forwardToPartner(sender.id, payload.to, payload);
+            forwardToPartner(sender.id, payload.to, protocol, payload);
             break;
         case 'next-partner':
             disconnectFromPartner(sender);
@@ -36,6 +38,9 @@ function handleCustomMessage(data: any, sender: Client) {
 }
 
 function findPartner(sender: Client) {
+    console.log(`[SERVER] findPartner called by client ${sender.id}`);
+    console.log(`[SERVER] Current waiting users:`, Array.from(waitingUsers.keys()));
+
     // Remove from waiting if already waiting
     waitingUsers.delete(sender.id.toString());
 
@@ -44,23 +49,39 @@ function findPartner(sender: Client) {
         const partner = waitingUsers.values().next().value;
         waitingUsers.delete(partner.id.toString());
 
+        console.log(`[SERVER] Matching client ${sender.id} with partner ${partner.id}`);
+
         // Map partners to each other
         partnerMap.set(sender.id.toString(), partner.id.toString());
         partnerMap.set(partner.id.toString(), sender.id.toString());
 
+        // Check socket states
+        console.log(`[SERVER] Sender ${sender.id} socket readyState:`, sender.socket.readyState);
+        console.log(`[SERVER] Partner ${partner.id} socket readyState:`, partner.socket.readyState);
+
         // Notify both users about the match
-        sender.socket.send(JSON.stringify({
+        const senderMessage = JSON.stringify({
             protocol: 'partner-found',
             payload: { partnerId: partner.id.toString() }
-        }));
-
-        partner.socket.send(JSON.stringify({
+        });
+        const partnerMessage = JSON.stringify({
             protocol: 'partner-found',
             payload: { partnerId: sender.id.toString() }
-        }));
+        });
+
+        console.log(`[SERVER] Sending partner-found to sender ${sender.id}:`, senderMessage);
+        sender.socket.send(senderMessage);
+
+        console.log(`[SERVER] Sending partner-found to partner ${partner.id}:`, partnerMessage);
+        partner.socket.send(partnerMessage);
+
+        console.log(`[SERVER] Both users notified of match`);
     } else {
         // Add to waiting list
         waitingUsers.set(sender.id.toString(), sender);
+        console.log(`[SERVER] Client ${sender.id} added to waiting list`);
+        console.log(`[SERVER] Waiting users now:`, Array.from(waitingUsers.keys()));
+
         sender.socket.send(JSON.stringify({
             protocol: 'waiting',
             payload: { message: 'Waiting for a partner...' }
@@ -68,17 +89,23 @@ function findPartner(sender: Client) {
     }
 }
 
-function forwardToPartner(fromId: string, toId: string, payload: any) {
+function forwardToPartner(fromId: string, toId: string, protocol: string, payload: any) {
+    console.log(`[SERVER] Forwarding ${protocol} from ${fromId} to ${toId}`);
     const toClient = sono.clients[toId];
     if (toClient && toClient.socket.readyState === WebSocket.OPEN) {
-        toClient.socket.send(JSON.stringify({
-            protocol: payload.originalProtocol || 'message',
+        const message = JSON.stringify({
+            protocol: protocol,
             payload: { ...payload, from: fromId }
-        }));
+        });
+        console.log(`[SERVER] Sending to client ${toId}:`, message.substring(0, 200));
+        toClient.socket.send(message);
+    } else {
+        console.log(`[SERVER] Cannot forward - client ${toId} not found or socket not open`);
     }
 }
 
 function disconnectFromPartner(sender: Client) {
+    console.log(`[SERVER] disconnectFromPartner called for client ${sender.id}`);
     const partnerId = partnerMap.get(sender.id.toString());
     if (partnerId) {
         const partner = sono.clients[partnerId];
@@ -97,6 +124,8 @@ function disconnectFromPartner(sender: Client) {
 // Override the default message handler to handle custom protocols
 const originalHandleWs = sono.handleWs.bind(sono);
 sono.handleWs = function(socket: WebSocket) {
+    console.log('[SERVER] handleWs called, socket readyState:', socket.readyState);
+
     // Call original handler
     originalHandleWs(socket);
 
@@ -104,25 +133,33 @@ sono.handleWs = function(socket: WebSocket) {
     const clientId = sono.lastClientId.toString();
     const client = sono.clients[clientId];
 
+    console.log(`[SERVER] New client created with id: ${clientId}`);
+    console.log(`[SERVER] All clients:`, Object.keys(sono.clients));
+
     if (client) {
         // Add custom message handler
         socket.addEventListener("message", (event) => {
             const message = event.data;
             try {
                 const data = JSON.parse(message);
+                console.log(`[SERVER] Raw message from client ${clientId}:`, data);
+
                 // Handle our custom protocols
                 if (['find-partner', 'video-offer', 'video-answer', 'ice-candidate', 'next-partner', 'stop-chat'].includes(data.protocol)) {
                     handleCustomMessage(data, client);
                 }
             } catch (e) {
-                // Ignore parse errors
+                console.log(`[SERVER] Parse error:`, e);
             }
         });
 
         // Handle disconnect
         socket.addEventListener("close", () => {
+            console.log(`[SERVER] Client ${clientId} disconnected`);
             disconnectFromPartner(client);
         });
+
+        console.log(`[SERVER] Message handlers attached to client ${clientId}`);
     }
 };
 
@@ -152,6 +189,7 @@ Deno.serve(async (req: Request) => {
 
     // Handle WebSocket connections
     if (url.pathname === '/ws') {
+        console.log('[SERVER] WebSocket connection request');
         return sono.connect(req);
     }
 
