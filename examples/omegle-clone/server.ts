@@ -155,6 +155,15 @@ Deno.serve(async (req: Request) => {
         return sono.connect(req);
     }
 
+    // Serve sonoClient.js from src directory
+    if (url.pathname === '/src/sonoClient.js') {
+        const basePath = new URL('../../src/', import.meta.url).pathname;
+        const content = await Deno.readFile(`${basePath}sonoClient.js`);
+        return new Response(content, {
+            headers: { 'Content-Type': 'application/javascript' }
+        });
+    }
+
     // Serve static files
     if (staticFiles.has(url.pathname)) {
         const contentType = url.pathname.endsWith('.html') ? 'text/html' :
