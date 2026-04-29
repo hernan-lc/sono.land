@@ -167,7 +167,7 @@ export class EventHandler {
     }))
   }
 
-  setViewerRole(packet: Packet, client: Client){
+  setViewerRole(packet: Packet, client: Client, channelsList: {[key: string]: Record<string, Client>}){
     const { isViewer } = packet.payload;
     client.isViewer = isViewer === 'true';
     console.log(`Client ${client.id} set as ${client.isViewer ? 'viewer' : 'broadcaster'}`);
@@ -178,5 +178,17 @@ export class EventHandler {
         isViewer: client.isViewer
       }
     }));
+
+    // Notify channel that this client's role changed (triggers reconnection)
+    const channelName = client.channel;
+    const channelClients = channelsList[channelName];
+    Object.values(channelClients).forEach((c) => {
+      if (c.id !== client.id && c.socket.readyState === WebSocket.OPEN) {
+        c.socket.send(JSON.stringify({
+          protocol: 'broadcasterChanged',
+          payload: { from: client.id.toString(), isViewer: client.isViewer }
+        }));
+      }
+    });
   }
 }

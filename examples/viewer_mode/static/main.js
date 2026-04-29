@@ -36,6 +36,19 @@ sono.onconnection(() => {
   rtc.startConnection()
 })
 
+// When someone becomes a broadcaster, re-run createRTCs to get their stream
+sono.on('broadcasterChanged', (payload) => {
+  log('Broadcaster changed:', payload.from, 'isViewer:', payload.isViewer)
+  if (!payload.isViewer) {
+    log('New broadcaster detected, triggering createRTCs')
+    // Reset existing PC for this client so it gets recreated with proper handlers
+    if (rtc.peerconnection[payload.from]) {
+      delete rtc.peerconnection[payload.from]
+    }
+    rtc.createRTCs()
+  }
+})
+
 // Toggle camera
 toggleBtn.onclick = () => {
   if (rtc.viewerMode) {
