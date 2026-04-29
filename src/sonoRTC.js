@@ -1,41 +1,44 @@
 export class SonoRTC {
   constructor(serverConfig, signalingServer, localVideo, remoteVideoContainer, constraints, viewerMode = false){
+    console.log('[RTC] constructor - viewerMode:', viewerMode)
     this.configuration = {iceServers: [{urls: serverConfig}]};
     this.peerconnection = {}
     this.server = signalingServer;
     this.localVideo = localVideo;
     this.constraints = constraints;
-    // this.eventListeners();
     this.mediaTracks = {};
     this.remotevideocontainer = remoteVideoContainer;
     this.viewerMode = viewerMode;
-    // this.localtracks = [];
-    // this.createOffer = this.createOffer.bind(this)
-    // this.createdOffer = null;
   }
   eventListeners(){
+    console.log('[RTC] setting up event listeners')
     this.server.on('grab', (payload) => {
+      console.log('[RTC] grab:', payload.type, payload.message)
       if(payload.type === 'clients'){
         this.clients = payload.message;
         if(this.mychannelclients && this.myid && this.mychannel){
+          console.log('[RTC] all info ready, triggering createRTCs')
           this.server.trigger('createRTCs')
         }
       }
       else if(payload.type === 'myid'){
         this.myid = payload.message[0];
         if(this.mychannelclients && this.clients && this.mychannel){
+          console.log('[RTC] all info ready, triggering createRTCs')
           this.server.trigger('createRTCs')
         }
       }
       else if(payload.type === 'mychannelclients'){
         this.mychannelclients = payload.message;
         if(this.clients && this.myid && this.mychannel){
+          console.log('[RTC] all info ready, triggering createRTCs')
           this.server.trigger('createRTCs')
         }
       }
       else if (payload.type === 'mychannel'){
         this.mychannel = payload.message;
         if(this.clients && this.myid && this.mychannelclients){
+          console.log('[RTC] all info ready, triggering createRTCs')
           this.server.trigger('createRTCs')
         }
       }
@@ -43,44 +46,51 @@ export class SonoRTC {
     this.server.on('sendingOffer', (payload)=> {
       const from = payload.from;
       const message = payload.message
+      console.log('[RTC] receivedOffer from:', from, 'inRoom:', this.inRoom, 'type:', message.type)
       if(message.type === 'offer'){
         if(this.inRoom === true) this.startConnection();
-        else return;
+        else {
+          console.log('[RTC] DROPPING OFFER - not in room!')
+          return;
+        }
 
-        this.peerconnection[from].setRemoteDescription(new RTCSessionDescription(message)) //wholething?
+        console.log('[RTC] setting remote description for offer from:', from)
+        this.peerconnection[from].setRemoteDescription(new RTCSessionDescription(message))
 
         this.peerconnection[from].createAnswer()
           .then(answer => {
+            console.log('[RTC] created answer for:', from)
             this.peerconnection[from].setLocalDescription(answer);
             this.server.directmessage(answer, from, 'sendingAnswer')
           })
-          .catch(err => console.log('error: unable to create answer', err))
+          .catch(err => console.log('[RTC] error creating answer:', err))
       }
     })
     this.server.on('sendingAnswer', (payload) => {
       const from = payload.from;
       const message = payload.message;
+      console.log('[RTC] receivedAnswer from:', from, 'type:', message.type)
       if(message.type === 'answer'){
-
         this.peerconnection[from].setRemoteDescription(new RTCSessionDescription(message));
       }
     })
     this.server.on('createRTCs', ()=> {
-
+      console.log('[RTC] createRTCs event')
       this.createRTCs();
     })
     this.server.on('icecandidate', (payload) => {
-
       const from = payload.from;
       const message = payload.message;
+      console.log('[RTC] icecandidate from:', from)
       this.peerconnection[from].addIceCandidate(message['new-ice-candidate'])
-        .catch(err => console.log('err', err))
+        .catch(err => console.log('[RTC] icecandidate error:', err))
     })
 
     this.server.on('clientleaving', (payload) => {
-
       const from = payload.from;
-      document.getElementById(from).remove();
+      console.log('[RTC] client leaving:', from)
+      const el = document.getElementById(from);
+      if(el) el.remove();
 
       delete this.peerconnection[from];
       delete this.mediaTracks[from];
@@ -88,14 +98,16 @@ export class SonoRTC {
       this.startConnection();
     })
     this.server.on('clientjoining', (payload) => {
-
+      console.log('[RTC] client joining:', payload.from)
       this.startConnection();
     })
   }
   startLocalMedia(){
     if(this.viewerMode){
+      console.log('[RTC] startLocalMedia - skipped (viewer mode)')
       return;
     }
+    console.log('[RTC] startLocalMedia - requesting camera')
     const getUserMedia = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
       ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
       : (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia)
@@ -106,73 +118,79 @@ export class SonoRTC {
         : null;
 
     if(!getUserMedia){
-      console.log('getUserMedia not supported');
+      console.log('[RTC] getUserMedia not supported');
       return;
     }
 
     getUserMedia(this.constraints)
     .then(mediaStream => {
+      console.log('[RTC] got local media, tracks:', mediaStream.getTracks().length)
       this.localVideo.srcObject = mediaStream;
       this.mediaStream = mediaStream;
     })
     .catch(err => {
-      console.log('getUserMedia error:', err.name, err.message);
+      console.log('[RTC] getUserMedia error:', err.name, err.message);
     })
   }
   async startConnection(){
+    console.log('[RTC] startConnection, inRoom:', this.inRoom)
     if(!this.inRoom) await this.eventListeners();
     this.inRoom = true;
+    console.log('[RTC] startConnection - grabbing info')
     this.server.grab('clients');
     this.server.grab('myid');
     this.server.grab('mychannelclients');
     this.server.grab('mychannel');
   }
   createRTCs(){
+    console.log('[RTC] createRTCs - myid:', this.myid, 'mychannelclients:', this.mychannelclients)
+    console.log('[RTC] createRTCs - viewerMode:', this.viewerMode, 'hasMediaStream:', !!this.mediaStream)
 
     this.mychannelclients.forEach(client => {
 
       if(client === this.myid || this.peerconnection[client]){
+        console.log('[RTC] createRTCs - skipping client:', client, '(self or already connected)')
         return;
       }
 
+      console.log('[RTC] createRTCs - creating peer connection for:', client)
       this.peerconnection[client] = new RTCPeerConnection(this.configuration);
 
       if(!this.viewerMode && this.mediaStream){
-        for (const track of this.mediaStream.getTracks()){
-
+        const tracks = this.mediaStream.getTracks()
+        console.log('[RTC] createRTCs - adding', tracks.length, 'tracks to connection with', client)
+        for (const track of tracks){
           this.peerconnection[client].addTrack(track, this.mediaStream);
-
         }
+      } else {
+        console.log('[RTC] createRTCs - viewer mode or no media, NOT adding tracks')
       }
       this.peerconnection[client].onnegotiationneeded = () => {
+        console.log('[RTC] onnegotiationneeded for:', client)
         this.peerconnection[client].createOffer()
           .then(createdOffer => {
-
+            console.log('[RTC] created offer for:', client)
             this.peerconnection[client].setLocalDescription(createdOffer);
             this.server.directmessage(createdOffer, client, 'sendingOffer');
           })
-          .catch(err => console.log('err', err))
+          .catch(err => console.log('[RTC] offer error:', err))
       }
       this.peerconnection[client].onicecandidate = (event) => {
         if (event.candidate) {
-
           const message = {'new-ice-candidate': event.candidate}
           this.server.directmessage(message, client, 'icecandidate');
         }
       }
       this.peerconnection[client].onconnectionstatechange = (event) => {
-        if (this.peerconnection[client].connectionState === 'connected') {
-
-          console.log('connected with client id:', client);
-        }
+        console.log('[RTC] connection state for', client, ':', this.peerconnection[client].connectionState)
       }
       this.peerconnection[client].ontrack = (event) => {
+        console.log('[RTC] ontrack from', client, 'kind:', event.track.kind)
 
         let remoteVideo;
 
-
         if(!this.mediaTracks[client]){
-
+          console.log('[RTC] creating new media stream and video element for:', client)
           this.mediaTracks[client] = new MediaStream();
           remoteVideo = document.createElement('video')
           remoteVideo.setAttribute('playsinline', 'true')
@@ -186,31 +204,23 @@ export class SonoRTC {
         }
 
         this.mediaTracks[client].addTrack(event.track)
-
         remoteVideo.srcObject = this.mediaTracks[client];
+        console.log('[RTC] video element updated for:', client)
       };
     })
   }
   changeChannel(targetChannel){
-
     if(!this.inRoom && targetChannel === 'home'){
       return this.startConnection();
     }
 
     if(targetChannel == this.mychannel){
-
       return;
     }
 
     this.server.broadcast('clientleaving', 'clientleaving');
-
     this.server.changeChannel(targetChannel);
-
-
     this.server.broadcast('clientjoining', 'clientjoining');
-
-    const remoteVideos = this.remotevideocontainer.childNodes;
-
 
     document.getElementById('remotevideocontainer').innerHTML = '';
 
@@ -221,9 +231,9 @@ export class SonoRTC {
   }
 
   setViewerMode(enabled){
+    console.log('[RTC] setViewerMode:', enabled)
     this.viewerMode = enabled;
     if(enabled){
-      console.log('Viewer mode enabled');
       if(this.mediaStream){
         this.mediaStream.getTracks().forEach(track => track.stop());
         this.mediaStream = null;
@@ -232,7 +242,6 @@ export class SonoRTC {
         this.localVideo.srcObject = null;
       }
     } else {
-      console.log('Viewer mode disabled');
       this.startLocalMedia();
     }
   }
